@@ -1,0 +1,550 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 360px;
+  min-height: 500px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+}
+
+#root {
+  min-height: 500px;
+}
+
+/* ============================
+   Common Styles
+   ============================ */
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 500px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #16213e;
+  border-bottom: 1px solid #0f3460;
+}
+
+.header-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #e94560;
+}
+
+.header-subtitle {
+  font-size: 12px;
+  color: #888;
+}
+
+.btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #e94560;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #c73e54;
+}
+
+.btn-secondary {
+  background: #0f3460;
+  color: #e0e0e0;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #1a4a7a;
+}
+
+.btn-danger {
+  background: #8b0000;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #a00;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* ============================
+   Form Styles
+   ============================ */
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #aaa;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: #16213e;
+  color: #e0e0e0;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  border-color: #e94560;
+}
+
+.form-input::placeholder {
+  color: #666;
+}
+
+textarea.form-input {
+  resize: vertical;
+  min-height: 80px;
+  font-family: monospace;
+}
+
+.form-error {
+  color: #e94560;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.form-hint {
+  color: #888;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+/* ============================
+   Card Styles
+   ============================ */
+
+.card {
+  background: #16213e;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 8px 16px;
+  border: 1px solid #0f3460;
+}
+
+.card-header {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #ccc;
+}
+
+/* ============================
+   Page Layout
+   ============================ */
+
+.page {
+  padding: 16px;
+  flex: 1;
+}
+
+.page-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.page-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.page-subtitle {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 24px;
+}
+
+/* ============================
+   Tabs
+   ============================ */
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid #333;
+  margin-bottom: 16px;
+}
+
+.tab {
+  flex: 1;
+  padding: 10px;
+  text-align: center;
+  font-size: 13px;
+  color: #888;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  color: #e0e0e0;
+}
+
+.tab.active {
+  color: #e94560;
+  border-bottom-color: #e94560;
+}
+
+/* ============================
+   Mnemonic Display
+   ============================ */
+
+.mnemonic-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.mnemonic-word {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 8px;
+  text-align: center;
+  font-size: 13px;
+  font-family: monospace;
+}
+
+.mnemonic-word-index {
+  color: #e94560;
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+
+.mnemonic-warning {
+  background: #3d1f00;
+  border: 1px solid #ff6600;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+  font-size: 12px;
+  color: #ffaa00;
+}
+
+/* ============================
+   Account Display
+   ============================ */
+
+.account-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #1a1a2e;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.account-card:hover {
+  background: #1f2940;
+}
+
+.account-card.active {
+  border: 1px solid #e94560;
+}
+
+.account-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #e94560;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: white;
+}
+
+.account-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.account-name {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.account-address {
+  font-size: 11px;
+  color: #888;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================
+   Balance Display
+   ============================ */
+
+.balance-display {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.balance-amount {
+  font-size: 28px;
+  font-weight: 700;
+  color: white;
+}
+
+.balance-symbol {
+  font-size: 14px;
+  color: #888;
+  margin-left: 4px;
+}
+
+/* ============================
+   Action Buttons Grid
+   ============================ */
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 8px;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  background: #1a4a7a;
+}
+
+.action-btn-icon {
+  font-size: 20px;
+}
+
+.action-btn-label {
+  font-size: 11px;
+}
+
+/* ============================
+   Token List
+   ============================ */
+
+.token-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #222;
+}
+
+.token-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.token-info {
+  flex: 1;
+}
+
+.token-symbol {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.token-name {
+  font-size: 11px;
+  color: #888;
+}
+
+.token-balance {
+  text-align: right;
+}
+
+.token-balance-amount {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.token-balance-value {
+  font-size: 11px;
+  color: #888;
+}
+
+/* ============================
+   Network Switcher
+   ============================ */
+
+.network-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #0f3460;
+  border-radius: 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.network-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4ade80;
+}
+
+/* ============================
+   Modal
+   ============================ */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  background: #16213e;
+  border-radius: 12px;
+  padding: 20px;
+  width: 320px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ============================
+   Misc
+   ============================ */
+
+.divider {
+  height: 1px;
+  background: #333;
+  margin: 16px 0;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #333;
+  border-top-color: #e94560;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 32px 16px;
+  color: #888;
+}
+
+.empty-state-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.copy-btn {
+  background: none;
+  border: none;
+  color: #e94560;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+}
+
+.copy-btn:hover {
+  text-decoration: underline;
+}
