@@ -28,8 +28,15 @@
     "typescript": "5.3.3"
   },
   "manifest": {
+    "permissions": [
+      "storage",
+      "scripting",
+      "activeTab",
+      "tabs"
+    ],
     "host_permissions": [
-      "https://*/*"
+      "https://*/*",
+      "http://*/*"
     ],
     "background": {
       "type": "module"

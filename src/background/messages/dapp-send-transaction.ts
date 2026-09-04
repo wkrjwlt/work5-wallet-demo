@@ -14,10 +14,12 @@ const handler: PlasmoMessaging.MessageHandler<
 > = async (req, res) => {
   try {
     const { params } = req.body
-    const txParams = params
+    const txParams = Array.isArray(params) ? params[0] : params
+    console.log("[dapp-send-transaction] txParams:", txParams)
 
     // 检查钱包是否解锁
     const secret = getCachedSecret()
+    console.log("[dapp-send-transaction] secret cached:", !!secret)
     if (!secret) {
       res.send({ error: "钱包已锁定" })
       return
@@ -36,8 +38,10 @@ const handler: PlasmoMessaging.MessageHandler<
     // 获取账户
     const accountsResult = await chrome.storage.local.get(STORAGE_KEYS.ACCOUNTS)
     const accounts: Account[] = accountsResult[STORAGE_KEYS.ACCOUNTS] || []
+    console.log("[dapp-send-transaction] accounts count:", accounts.length, "accounts:", accounts.map(a => a.address))
 
     const fromAddress = txParams.from?.toLowerCase()
+    console.log("[dapp-send-transaction] looking for fromAddress:", fromAddress)
     const account = accounts.find(
       (a) => a.address.toLowerCase() === fromAddress
     )
