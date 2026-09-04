@@ -1,5 +1,64 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import "../popup.css"
+
+// 合约函数选择器映射（keccak256 前4字节）
+const CONTRACT_FUNCTIONS: Record<string, { name: string; params: string[] }> = {
+  "0xf6326fb3": { name: "depositETH", params: [] },
+  "0x9e2c8a5b": { name: "unstake", params: ["uint256 _pid", "uint256 _amount"] },
+  "0x2e1a7d4d": { name: "withdraw", params: ["uint256 _pid"] },
+  "0x379607f5": { name: "claim", params: ["uint256 _pid"] },
+}
+
+// 解码合约调用 data（传入 value 用于 payable 函数）
+function decodeContractData(data: string, value: string): { functionName: string; description: string; amount?: string } | null {
+  if (!data || data === "0x" || data.length < 10) return null
+
+  const selector = data.slice(0, 10).toLowerCase()
+  const funcInfo = CONTRACT_FUNCTIONS[selector]
+  if (!funcInfo) return null
+
+  const result: { functionName: string; description: string; amount?: string } = {
+    functionName: funcInfo.name,
+    description: "",
+    amount: undefined,
+  }
+
+  // 解码参数（每32字节一个参数）
+  const paramData = data.slice(10)
+  const paramChunks: string[] = []
+  for (let i = 0; i < paramData.length; i += 64) {
+    paramChunks.push(paramData.slice(i, i + 64))
+  }
+
+  switch (funcInfo.name) {
+    case "depositETH": {
+      // payable 函数，金额在 value 字段
+      const valueWei = BigInt(value || "0x0")
+      const valueEth = Number(valueWei) / 1e18
+      result.amount = valueEth.toFixed(6)
+      result.description = `质押 ${valueEth.toFixed(6)} ETH`
+      break
+    }
+    case "unstake":
+      if (paramChunks.length >= 2) {
+        const amountWei = BigInt("0x" + paramChunks[1])
+        const amountEth = Number(amountWei) / 1e18
+        result.amount = amountEth.toFixed(6)
+        result.description = `解除质押 ${amountEth.toFixed(6)} ETH`
+      }
+      break
+    case "withdraw":
+      result.description = "提取待领取 ETH"
+      break
+    case "claim":
+      result.description = "领取 MetaNode 奖励"
+      break
+    default:
+      result.description = `合约调用: ${funcInfo.name}`
+  }
+
+  return result
+}
 
 function formatEth(hexValue: string): string {
   try {
@@ -9,6 +68,23 @@ function formatEth(hexValue: string): string {
   } catch {
     return "0"
   }
+}
+
+function formatEthShort(hexValue: string): string {
+  try {
+    const wei = BigInt(hexValue || "0x0")
+    const eth = Number(wei) / 1e18
+    if (eth === 0) return "0"
+    if (eth < 0.000001) return "<0.000001"
+    return eth.toFixed(6)
+  } catch {
+    return "0"
+  }
+}
+
+function shortenAddress(addr: string): string {
+  if (!addr || addr.length < 10) return addr
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`
 }
 
 export default function ConfirmTransactionPage() {
@@ -23,7 +99,18 @@ export default function ConfirmTransactionPage() {
   const [passwordError, setPasswordError] = useState("")
   const [loading, setLoading] = useState(true)
   const [responded, setResponded] = useState(false)
+  const [rejected, setRejected] = useState(false)
   const [unlocking, setUnlocking] = useState(false)
+
+  // Gas 相关状态
+  const [gasLimit, setGasLimit] = useState("0x5208")
+  const [gasPrice, setGasPrice] = useState("0x0")
+  const [gasCostWei, setGasCostWei] = useState("0x0")
+  const [balance, setBalance] = useState("0x0")
+  const [gasError, setGasError] = useState("")
+
+  // 合约调用解码信息（传入 txValue 用于 payable 函数）
+  const contractInfo = useMemo(() => decodeContractData(txData, txValue), [txData, txValue])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -34,8 +121,33 @@ export default function ConfirmTransactionPage() {
     setTxValue(params.get("value") || "0x0")
     setTxData(params.get("data") || "0x")
     setWalletLocked(params.get("locked") === "true")
+    setGasLimit(params.get("gasLimit") || "0x5208")
+    setGasPrice(params.get("gasPrice") || "0x0")
+    setGasCostWei(params.get("gasCostWei") || "0x0")
+    setBalance(params.get("balance") || "0x0")
+    setGasError(params.get("gasError") || "")
     setLoading(false)
   }, [])
+
+  // 计算是否余额不足
+  const insufficientBalance = useMemo(() => {
+    try {
+      const totalCost = BigInt(txValue || "0x0") + BigInt(gasCostWei || "0x0")
+      const balanceBig = BigInt(balance || "0x0")
+      return balanceBig < totalCost
+    } catch {
+      return false
+    }
+  }, [txValue, gasCostWei, balance])
+
+  // 总费用（金额 + gas）
+  const totalCostWei = useMemo(() => {
+    try {
+      return BigInt(txValue || "0x0") + BigInt(gasCostWei || "0x0")
+    } catch {
+      return 0n
+    }
+  }, [txValue, gasCostWei])
 
   const handleUnlockAndApprove = async () => {
     if (responded || !password) return
@@ -65,7 +177,7 @@ export default function ConfirmTransactionPage() {
   }
 
   const handleApprove = async () => {
-    if (responded) return
+    if (responded || insufficientBalance) return
     setResponded(true)
     try {
       const params = new URLSearchParams(window.location.search)
@@ -80,6 +192,7 @@ export default function ConfirmTransactionPage() {
   const handleReject = async () => {
     if (responded) return
     setResponded(true)
+    setRejected(true)
     try {
       const params = new URLSearchParams(window.location.search)
       const requestId = params.get("requestId") || ""
@@ -99,6 +212,9 @@ export default function ConfirmTransactionPage() {
   }
 
   const ethValue = formatEth(txValue)
+  const gasCostEth = formatEthShort(gasCostWei)
+  const balanceEth = formatEthShort(balance)
+  const totalCostEth = formatEth("0x" + totalCostWei.toString(16))
 
   return (
     <div className="app-container" style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
@@ -109,56 +225,147 @@ export default function ConfirmTransactionPage() {
 
       <div style={{ flex: 1, padding: "16px", display: "flex", flexDirection: "column", overflow: "auto" }}>
         {/* DApp Info */}
-        <div style={{ textAlign: "center", marginBottom: 16 }}>
+        <div style={{ textAlign: "center", marginBottom: 12 }}>
           <div style={{
-            width: 48, height: 48, margin: "0 auto 8px",
+            width: 44, height: 44, margin: "0 auto 8px",
             background: "linear-gradient(135deg, #667eea, #764ba2)",
-            borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22,
+            borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20,
           }}>
             {favicon ? (
-              <img src={favicon} alt="" style={{ width: 32, height: 32, borderRadius: 6 }}
+              <img src={favicon} alt="" style={{ width: 30, height: 30, borderRadius: 6 }}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }} />
             ) : "🔗"}
           </div>
-          <h2 style={{ margin: "0 0 4px", fontSize: 16, color: "#1a1a2e" }}>交易确认</h2>
-          <p style={{ margin: 0, fontSize: 12, color: "#666", wordBreak: "break-all" }}>{origin}</p>
+          <h2 style={{ margin: "0 0 2px", fontSize: 15, color: "#1a1a2e" }}>交易确认</h2>
+          <p style={{ margin: 0, fontSize: 11, color: "#666", wordBreak: "break-all" }}>{origin}</p>
         </div>
 
-        {/* Transaction Details */}
-        <div style={{ background: "#f8f9fa", borderRadius: 12, padding: 14, marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "#999", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
-            交易详情
-          </div>
-          {/* Value */}
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 11, color: "#999", marginBottom: 2 }}>金额</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#1a1a2e" }}>{ethValue} ETH</div>
-          </div>
-          {/* From */}
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 11, color: "#999", marginBottom: 2 }}>发送方</div>
-            <div style={{ fontSize: 12, color: "#333", fontFamily: "monospace", wordBreak: "break-all" }}>{txFrom}</div>
-          </div>
-          {/* To */}
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 11, color: "#999", marginBottom: 2 }}>接收方</div>
-            <div style={{ fontSize: 12, color: "#333", fontFamily: "monospace", wordBreak: "break-all" }}>{txTo}</div>
-          </div>
-          {/* Data */}
-          {txData && txData !== "0x" && (
-            <div>
-              <div style={{ fontSize: 11, color: "#999", marginBottom: 2 }}>Data</div>
-              <div style={{ fontSize: 11, color: "#666", fontFamily: "monospace", wordBreak: "break-all",
-                background: "#fff", padding: 8, borderRadius: 6, maxHeight: 60, overflow: "auto" }}>
-                {txData}
-              </div>
-            </div>
+        {/* 交易信息 */}
+        <div style={{
+          background: "#f0f0ff", borderRadius: 12, padding: "16px 14px", marginBottom: 12,
+          textAlign: "center",
+        }}>
+          {contractInfo ? (
+            <>
+              <div style={{ fontSize: 11, color: "#999", marginBottom: 4 }}>{contractInfo.functionName}</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#1a1a2e" }}>{contractInfo.description}</div>
+              {contractInfo.amount && (
+                <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>金额: {contractInfo.amount} ETH</div>
+              )}
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 11, color: "#999", marginBottom: 4 }}>交易金额</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: "#1a1a2e" }}>{ethValue} ETH</div>
+            </>
           )}
         </div>
 
+        {/* Gas 费用信息 */}
+        <div style={{
+          background: "#f8f9fa", borderRadius: 12, padding: 14, marginBottom: 12,
+        }}>
+          <div style={{
+            fontSize: 11, color: "#999", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10,
+          }}>
+            费用详情
+          </div>
+
+          {/* Gas Limit */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: "#666" }}>Gas Limit</span>
+            <span style={{ fontSize: 12, color: "#333", fontFamily: "monospace" }}>
+              {parseInt(gasLimit, 16).toLocaleString()}
+            </span>
+          </div>
+
+          {/* Gas Price */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: "#666" }}>Gas Price</span>
+            <span style={{ fontSize: 12, color: "#333", fontFamily: "monospace" }}>
+              {formatEthShort(gasPrice)} ETH
+            </span>
+          </div>
+
+          {/* Gas Fee */}
+          <div style={{
+            display: "flex", justifyContent: "space-between", marginBottom: 8,
+            paddingTop: 8, borderTop: "1px solid #eee",
+          }}>
+            <span style={{ fontSize: 13, color: "#333", fontWeight: 600 }}>预估 Gas 费用</span>
+            <span style={{
+              fontSize: 13, color: gasError ? "#dc3545" : "#333", fontWeight: 600,
+            }}>
+              {gasError ? "估算失败" : `${gasCostEth} ETH`}
+            </span>
+          </div>
+
+          {/* Total */}
+          <div style={{
+            display: "flex", justifyContent: "space-between",
+            paddingTop: 8, borderTop: "1px solid #eee",
+          }}>
+            <span style={{ fontSize: 14, color: "#1a1a2e", fontWeight: 700 }}>总计</span>
+            <span style={{ fontSize: 14, color: "#1a1a2e", fontWeight: 700 }}>
+              {totalCostEth} ETH
+            </span>
+          </div>
+        </div>
+
+        {/* From / To */}
+        <div style={{
+          background: "#f8f9fa", borderRadius: 12, padding: 14, marginBottom: 12,
+        }}>
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: "#999", marginBottom: 2 }}>发送方</div>
+            <div style={{
+              fontSize: 12, color: "#333", fontFamily: "monospace", wordBreak: "break-all",
+              display: "flex", alignItems: "center", gap: 6,
+            }}>
+              <span>{shortenAddress(txFrom)}</span>
+              <span style={{ fontSize: 10, color: "#999" }}>|</span>
+              <span style={{ fontSize: 11, color: "#666" }}>余额: {balanceEth} ETH</span>
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: "#999", marginBottom: 2 }}>接收方</div>
+            <div style={{
+              fontSize: 12, color: "#333", fontFamily: "monospace", wordBreak: "break-all",
+            }}>
+              {shortenAddress(txTo)}
+            </div>
+          </div>
+        </div>
+
+        {/* Data (if contract call) */}
+        {txData && txData !== "0x" && (
+          <div style={{
+            background: "#f8f9fa", borderRadius: 12, padding: 14, marginBottom: 12,
+          }}>
+            <div style={{ fontSize: 11, color: "#999", marginBottom: 6 }}>合约调用 Data</div>
+            <div style={{
+              fontSize: 10, color: "#666", fontFamily: "monospace", wordBreak: "break-all",
+              background: "#fff", padding: 8, borderRadius: 6, maxHeight: 50, overflow: "auto",
+              lineHeight: 1.4,
+            }}>
+              {txData}
+            </div>
+          </div>
+        )}
+
+        {/* 余额不足警告 */}
+        {insufficientBalance && (
+          <div style={{
+            background: "#fff3cd", borderRadius: 10, padding: 12, marginBottom: 12,
+            fontSize: 12, color: "#856404", fontWeight: 500,
+          }}>
+            ⚠️ 账户余额不足以支付交易金额 + Gas 费用。当前余额: {balanceEth} ETH，需要: {totalCostEth} ETH
+          </div>
+        )}
+
         {/* Password input (if locked) */}
         {walletLocked && (
-          <div style={{ background: "#fff3cd", borderRadius: 10, padding: 14, marginBottom: 16 }}>
+          <div style={{ background: "#fff3cd", borderRadius: 10, padding: 14, marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: "#856404", marginBottom: 8, fontWeight: 600 }}>
               🔒 钱包已锁定，请输入密码解锁
             </div>
@@ -180,17 +387,8 @@ export default function ConfirmTransactionPage() {
           </div>
         )}
 
-        {/* Warning */}
-        <div style={{
-          background: walletLocked ? "#f8f9fa" : "#fff3cd",
-          borderRadius: 10, padding: 12, marginBottom: 16, fontSize: 12,
-          color: walletLocked ? "#666" : "#856404",
-        }}>
-          {walletLocked ? "⚠️ 解锁后将自动发送交易" : "⚠️ 请确认以上交易信息无误后点击批准"}
-        </div>
-
         {/* Action Buttons */}
-        <div style={{ marginTop: "auto", display: "flex", gap: 12 }}>
+        <div style={{ marginTop: "auto", display: "flex", gap: 12, paddingTop: 8 }}>
           <button
             onClick={handleReject}
             disabled={responded}
@@ -204,16 +402,21 @@ export default function ConfirmTransactionPage() {
           </button>
           <button
             onClick={walletLocked ? handleUnlockAndApprove : handleApprove}
-            disabled={responded || (walletLocked && !password)}
+            disabled={responded || insufficientBalance || (walletLocked && !password)}
             style={{
               flex: 1, padding: "14px 0", border: "none", borderRadius: 12,
-              background: "linear-gradient(135deg, #667eea, #764ba2)",
+              background: insufficientBalance ? "#ccc" : "linear-gradient(135deg, #667eea, #764ba2)",
               color: "#fff", fontSize: 15, fontWeight: 600,
-              cursor: responded || (walletLocked && !password) ? "not-allowed" : "pointer",
+              cursor: responded || insufficientBalance || (walletLocked && !password) ? "not-allowed" : "pointer",
               opacity: responded || (walletLocked && !password) ? 0.5 : 1,
             }}
           >
-            {responded ? (unlocking ? "解锁中..." : "处理中...") : (walletLocked ? "解锁并批准" : "批准")}
+            {responded
+              ? (rejected ? "已拒绝" : (unlocking ? "解锁中..." : "处理中..."))
+              : insufficientBalance
+                ? "余额不足"
+                : (walletLocked ? "解锁并批准" : "批准")
+            }
           </button>
         </div>
       </div>

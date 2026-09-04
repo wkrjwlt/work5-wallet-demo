@@ -137,12 +137,23 @@ function showTransactionConfirm(txParams: any): Promise<boolean> {
     }, 180000)
 
     try {
+      // 确保 value 是 hex 字符串（viem/wagmi 可能传 bigint）
+      let valueHex = "0x0"
+      if (txParams.value !== undefined && txParams.value !== null) {
+        if (typeof txParams.value === "bigint") {
+          valueHex = "0x" + txParams.value.toString(16)
+        } else {
+          valueHex = typeof txParams.value === "string" ? txParams.value : String(txParams.value)
+        }
+      }
+      console.log("[WLT Wallet] txParams.value:", txParams.value, "→ valueHex:", valueHex)
+
       const response = await chrome.runtime.sendMessage({
         name: "show-transaction-confirm",
         body: {
           from: txParams.from,
           to: txParams.to,
-          value: txParams.value,
+          value: valueHex,
           data: txParams.data,
           origin,
           favicon,
