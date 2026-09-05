@@ -1,6 +1,8 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
 
-// Background handler: 将响应结果传递回 MAIN world 的注入脚本
+// Background handler: 将响应结果传递回注入脚本
+// 通过 chrome.tabs.sendMessage 发送给 content script，再由 content script 转发到 MAIN world
+// 这样不需要暴露全局 __wltResolve 函数
 const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
   try {
     const { id, result, error, tabId } = req.body || {}
@@ -19,24 +21,18 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
       return
     }
 
-    // 使用 chrome.scripting.executeScript 在 MAIN world 中调用 __wltResolve
-    const results = await chrome.scripting.executeScript({
-      target: { tabId, allFrames: false },
-      world: "MAIN",
-      func: (requestId: number, resultData: any, errorData: string | null) => {
-        const resolveFn = (window as any).__wltResolve;
-        console.log("[WLT Wallet] __wltResolve exists:", typeof resolveFn)
-        if (typeof resolveFn === "function") {
-          resolveFn(requestId, resultData, errorData);
-          console.log("[WLT Wallet] __wltResolve called with id:", requestId)
-        } else {
-          console.error("[WLT Wallet] __wltResolve not found on window");
-        }
+    // 通过 chrome.tabs.sendMessage 将响应发送给 content script
+    // content script 会通过 window.postMessage 转发到 MAIN world 的注入脚本
+    await chrome.tabs.sendMessage(tabId, {
+      name: "wlt-resolve-response",
+      body: {
+        id,
+        result: result ?? null,
+        error: error ?? null,
       },
-      args: [id, result ?? null, error ?? null],
     })
 
-    console.log("[WLT resolve-wlt-request] executeScript results:", results)
+    console.log("[WLT resolve-wlt-request] Response sent to content script via tabs.sendMessage")
     res.send({ success: true })
   } catch (error: any) {
     console.error("[WLT Wallet] resolve-wlt-request failed:", error)

@@ -50,7 +50,7 @@ export function SendEth({ onBack }: Props) {
       try {
         const [gasResult, balanceResult] = await Promise.all([
           getGasPrice(),
-          getBalance(activeAccount.address),
+          getBalance(activeAccount.address, activeNetwork.chainId),
         ])
 
         if (gasResult.success && gasResult.gasPrice) {
@@ -109,7 +109,7 @@ export function SendEth({ onBack }: Props) {
     let balanceWei = currentBalance
     if (balanceWei === "0") {
       try {
-        const result = await getBalance(activeAccount.address)
+        const result = await getBalance(activeAccount.address, activeNetwork.chainId)
         if (result.success && result.balance) {
           balanceWei = result.balance
           setCurrentBalance(balanceWei)

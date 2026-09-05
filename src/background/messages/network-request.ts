@@ -12,15 +12,22 @@ const handler: PlasmoMessaging.MessageHandler<
   NetworkRequestResponse
 > = async (req, res) => {
   try {
-    const { method, params } = req.body
+    const { method, params, chainId } = req.body
 
-    // Get the active network's RPC URL
-    const networksResult = await chrome.storage.local.get([
-      STORAGE_KEYS.NETWORKS,
-      STORAGE_KEYS.ACTIVE_CHAIN_ID,
-    ])
+    // 优先使用传入的 chainId，其次从 storage 读取
+    let activeChainId: number
+    if (chainId) {
+      activeChainId = chainId
+    } else {
+      const networksResult = await chrome.storage.local.get([
+        STORAGE_KEYS.NETWORKS,
+        STORAGE_KEYS.ACTIVE_CHAIN_ID,
+      ])
+      activeChainId = networksResult[STORAGE_KEYS.ACTIVE_CHAIN_ID] || DEFAULT_CHAIN_ID
+    }
+
+    const networksResult = await chrome.storage.local.get(STORAGE_KEYS.NETWORKS)
     const networks = networksResult[STORAGE_KEYS.NETWORKS] || DEFAULT_NETWORKS
-    const activeChainId = networksResult[STORAGE_KEYS.ACTIVE_CHAIN_ID] || DEFAULT_CHAIN_ID
     const activeNetwork = networks.find((n) => n.chainId === activeChainId)
     const rpcUrl = activeNetwork?.rpcUrl || DEFAULT_NETWORKS[0].rpcUrl
 

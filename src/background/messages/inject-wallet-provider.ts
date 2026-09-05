@@ -26,18 +26,25 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         let requestId = 0;
         const pendingRequests = new Map();
 
-        // 全局解析函数 - 由 background 通过 chrome.scripting.executeScript 调用
-        (window as any).__wltResolve = (id: number, result: any, error: string | null) => {
-          const pending = pendingRequests.get(id);
+        // 监听来自 content script 的响应（通过 window.postMessage 转发）
+        // 验证消息格式：必须有 channel、id、且包含 result 或 error（不含 method 的才是响应）
+        window.addEventListener("message", (event) => {
+          if (event.source !== window) return;
+          const data = event.data;
+          if (!data || data.channel !== WLT_CHANNEL) return;
+          if (data.method) return; // 这是请求消息，不是响应
+          if (data.id === undefined) return;
+
+          const pending = pendingRequests.get(data.id);
           if (pending) {
-            pendingRequests.delete(id);
-            if (error) {
-              pending.reject(new Error(error));
+            pendingRequests.delete(data.id);
+            if (data.error) {
+              pending.reject(new Error(data.error));
             } else {
-              pending.resolve(result);
+              pending.resolve(data.result);
             }
           }
-        };
+        });
 
         // 发送请求到内容脚本（通过 postMessage，MAIN → isolated 可以工作）
         function sendRequest(method, params) {
@@ -155,9 +162,13 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
           }
         }
 
-        // 注入到页面的 window
+        // 注入到页面的 window（冻结对象，防止页面脚本覆盖或删除）
         const provider = new WltWalletProvider();
-        (window as any).wltwallet = provider;
+        Object.defineProperty(window, "wltwallet", {
+          value: provider,
+          writable: false,
+          configurable: false,
+        });
 
         // 触发初始化事件
         window.dispatchEvent(new CustomEvent("wltwallet#initialized", { detail: provider }));

@@ -75,12 +75,30 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       STORAGE_KEYS.NETWORKS,
       STORAGE_KEYS.ACTIVE_CHAIN_ID,
     ])
-    const networks: Network[] =
+    let networks: Network[] =
       result[STORAGE_KEYS.NETWORKS] || DEFAULT_NETWORKS
     const activeChainId: number =
       result[STORAGE_KEYS.ACTIVE_CHAIN_ID] || DEFAULT_CHAIN_ID
 
-    set({ networks, activeChainId })
+    // 迁移：更新已知不可用的 RPC 节点
+    const RPC_MIGRATIONS: Record<string, string> = {
+      "https://eth.llamarpc.com": "https://ethereum-rpc.publicnode.com",
+    }
+    let changed = false
+    networks = networks.map((n) => {
+      const newRpc = RPC_MIGRATIONS[n.rpcUrl]
+      if (newRpc) {
+        changed = true
+        return { ...n, rpcUrl: newRpc }
+      }
+      return n
+    })
+    if (changed) {
+      set({ networks, activeChainId })
+      chrome.storage.local.set({ [STORAGE_KEYS.NETWORKS]: networks })
+    } else {
+      set({ networks, activeChainId })
+    }
   },
 
   reset: () => {

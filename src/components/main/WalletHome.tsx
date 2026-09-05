@@ -31,9 +31,11 @@ export function WalletHome() {
 
   const fetchBalance = async () => {
     if (!activeAccount) return
+    console.log("[WalletHome] fetchBalance called with chainId:", activeChainId)
     setLoadingBalance(true)
     try {
-      const response = await getBalance(activeAccount.address)
+      const response = await getBalance(activeAccount.address, activeChainId)
+      console.log("[WalletHome] fetchBalance response:", response)
       if (response.success && response.balance) {
         setBalance(response.balance)
       }
@@ -65,7 +67,7 @@ export function WalletHome() {
         const result = await networkRequest("eth_call", [
           { to: token.contractAddress, data },
           "latest",
-        ])
+        ], activeChainId)
 
         if (result.success && result.result) {
           const rawBalance = BigInt(result.result)
@@ -86,6 +88,7 @@ export function WalletHome() {
   }
 
   useEffect(() => {
+    console.log("[WalletHome] useEffect triggered:", { chainId: activeChainId, address: activeAccount?.address })
     fetchBalance()
     fetchTokenBalances()
   }, [activeAccount?.address, activeNetwork?.chainId, tokens.length])

@@ -170,6 +170,7 @@ export interface SendTransactionResponse {
 
 export interface GetBalanceRequest {
   address: string
+  chainId?: number
 }
 
 export interface GetBalanceResponse {
@@ -192,6 +193,7 @@ export interface GetTokenBalanceResponse {
 export interface NetworkRequestRequest {
   method: string
   params: any[]
+  chainId?: number
 }
 
 export interface NetworkRequestResponse {

@@ -111,21 +111,21 @@ export function useMessaging() {
     })
   }, [])
 
-  const getBalance = useCallback(async (address: string) => {
+  const getBalance = useCallback(async (address: string, chainId?: number) => {
     return sendToBackground<GetBalanceRequest, GetBalanceResponse>({
       name: "get-balance",
-      body: { address },
+      body: { address, chainId },
     })
   }, [])
 
   const networkRequest = useCallback(
-    async (method: string, params: any[]) => {
+    async (method: string, params: any[], chainId?: number) => {
       return sendToBackground<
         NetworkRequestRequest,
         NetworkRequestResponse
       >({
         name: "network-request",
-        body: { method, params },
+        body: { method, params, chainId },
       })
     },
     []

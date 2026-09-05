@@ -51,6 +51,7 @@ export function NetworkSwitcher({ onAddNetwork }: Props) {
                   network.chainId === activeChainId ? "#0f3460" : "transparent",
               }}
               onClick={() => {
+                console.log("[NetworkSwitcher] Switching to chainId:", network.chainId)
                 setActiveNetwork(network.chainId)
                 setOpen(false)
               }}

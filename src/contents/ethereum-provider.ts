@@ -83,7 +83,7 @@ function showApprovalPopup(addresses: string[]): Promise<boolean> {
       }
     } catch (e) {
       console.error("[WLT Wallet] Failed to show approval popup:", e)
-      doResolve(true) // 弹窗失败时默认允许
+      doResolve(false) // 安全原则：弹窗失败时默认拒绝，防止恶意页面通过阻止弹窗来绕过用户确认
     }
   })
 }
@@ -166,6 +166,132 @@ function showTransactionConfirm(txParams: any): Promise<boolean> {
     } catch (e) {
       console.error("[WLT Wallet] Failed to show transaction confirm:", e)
       doResolve(false)
+    }
+  })
+}
+
+// 显示签名确认弹窗，等待用户确认
+// 使用与 showTransactionConfirm 相同的 storage 事件 + 轮询机制
+function showSignConfirm(account: string, message: string, method: string): Promise<boolean> {
+  console.log("[WLT Wallet] showSignConfirm called:", { account, method })
+  return new Promise(async (resolve) => {
+    let resolved = false
+    const doResolve = (value: boolean) => {
+      if (resolved) return
+      resolved = true
+      clearTimeout(timeout)
+      clearInterval(pollInterval)
+      chrome.storage.onChanged.removeListener(onStorageChange)
+      chrome.storage.local.remove(storageKey)
+      console.log("[WLT Wallet] Sign confirm resolved:", value)
+      resolve(value)
+    }
+
+    const requestId = `req_sign_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const storageKey = `wlt_approval_${requestId}`
+
+    const origin = window.location.origin
+    const faviconEl = document.querySelector('link[rel*="icon"]') as HTMLLinkElement
+    const favicon = faviconEl?.href || ""
+
+    // 机制1: 监听 storage 变化
+    const onStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }) => {
+      if (changes[storageKey]) {
+        const { newValue } = changes[storageKey]
+        doResolve(newValue?.approved ?? false)
+      }
+    }
+    chrome.storage.onChanged.addListener(onStorageChange)
+
+    // 机制2: 轮询 storage
+    const pollInterval = setInterval(async () => {
+      try {
+        const result = await chrome.storage.local.get(storageKey)
+        if (result[storageKey]) {
+          doResolve(result[storageKey].approved ?? false)
+        }
+      } catch (e) {}
+    }, 500)
+
+    // 超时 120 秒自动拒绝
+    const timeout = setTimeout(() => {
+      doResolve(false)
+    }, 120000)
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        name: "show-sign-confirm",
+        body: { account, message, method, origin, favicon, requestId },
+      })
+      if (response?.approved !== undefined) {
+        doResolve(response.approved)
+      }
+    } catch (e) {
+      console.error("[WLT Wallet] Failed to show sign confirm:", e)
+      doResolve(false) // 安全原则：弹窗失败时默认拒绝
+    }
+  })
+}
+
+// 显示链切换确认弹窗，等待用户确认
+// 使用与 showTransactionConfirm 相同的 storage 事件 + 轮询机制
+function showChainSwitchConfirm(chainId: string): Promise<boolean> {
+  console.log("[WLT Wallet] showChainSwitchConfirm called:", { chainId })
+  return new Promise(async (resolve) => {
+    let resolved = false
+    const doResolve = (value: boolean) => {
+      if (resolved) return
+      resolved = true
+      clearTimeout(timeout)
+      clearInterval(pollInterval)
+      chrome.storage.onChanged.removeListener(onStorageChange)
+      chrome.storage.local.remove(storageKey)
+      console.log("[WLT Wallet] Chain switch confirm resolved:", value)
+      resolve(value)
+    }
+
+    const requestId = `req_chain_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const storageKey = `wlt_approval_${requestId}`
+
+    const origin = window.location.origin
+    const faviconEl = document.querySelector('link[rel*="icon"]') as HTMLLinkElement
+    const favicon = faviconEl?.href || ""
+
+    // 机制1: 监听 storage 变化
+    const onStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }) => {
+      if (changes[storageKey]) {
+        const { newValue } = changes[storageKey]
+        doResolve(newValue?.approved ?? false)
+      }
+    }
+    chrome.storage.onChanged.addListener(onStorageChange)
+
+    // 机制2: 轮询 storage
+    const pollInterval = setInterval(async () => {
+      try {
+        const result = await chrome.storage.local.get(storageKey)
+        if (result[storageKey]) {
+          doResolve(result[storageKey].approved ?? false)
+        }
+      } catch (e) {}
+    }, 500)
+
+    // 超时 60 秒自动拒绝
+    const timeout = setTimeout(() => {
+      doResolve(false)
+    }, 60000)
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        name: "show-chain-switch-confirm",
+        body: { chainId, origin, favicon, requestId },
+      })
+      if (response?.approved !== undefined) {
+        doResolve(response.approved)
+      }
+    } catch (e) {
+      console.error("[WLT Wallet] Failed to show chain switch confirm:", e)
+      doResolve(false) // 安全原则：弹窗失败时默认拒绝
     }
   })
 }
@@ -253,12 +379,22 @@ window.addEventListener("message", async (event) => {
         }
         break
 
-      case "wallet_switchEthereumChain":
+      case "wallet_switchEthereumChain": {
+        // 先弹出链切换确认窗口
+        const switchChainId = params?.[0]?.chainId
+        if (switchChainId) {
+          const chainConfirmed = await showChainSwitchConfirm(switchChainId)
+          if (!chainConfirmed) {
+            response = { error: "用户拒绝了链切换" }
+            break
+          }
+        }
         response = await chrome.runtime.sendMessage({
           name: "dapp-switch-chain",
           body: { params },
         })
         break
+      }
 
       case "wallet_addEthereumChain":
         response = await chrome.runtime.sendMessage({
@@ -290,21 +426,43 @@ window.addEventListener("message", async (event) => {
       }
 
       case "personal_sign":
-      case "eth_sign":
-        response = await chrome.runtime.sendMessage({
-          name: "dapp-sign",
-          body: { method, params },
-        })
+      case "eth_sign": {
+        // personal_sign params: [message, account]
+        // eth_sign params: [account, message]
+        const signAccount = method === "personal_sign" ? (params?.[1] || "") : (params?.[0] || "")
+        const signMessage = method === "personal_sign" ? (params?.[0] || "") : (params?.[1] || "")
+        // 先弹出签名确认窗口
+        const signConfirmed = await showSignConfirm(signAccount, signMessage, method)
+        if (!signConfirmed) {
+          response = { error: "用户拒绝了签名请求" }
+        } else {
+          response = await chrome.runtime.sendMessage({
+            name: "dapp-sign",
+            body: { method, params },
+          })
+        }
         break
+      }
 
       case "eth_signTypedData":
       case "eth_signTypedData_v3":
-      case "eth_signTypedData_v4":
-        response = await chrome.runtime.sendMessage({
-          name: "dapp-sign-typed-data",
-          body: { method, params },
-        })
+      case "eth_signTypedData_v4": {
+        // typedData params: [account, typedData]
+        const typedAccount = params?.[0] || ""
+        const typedData = params?.[1] || {}
+        const typedDataJson = typeof typedData === "string" ? typedData : JSON.stringify(typedData)
+        // 先弹出签名确认窗口
+        const typedConfirmed = await showSignConfirm(typedAccount, typedDataJson, method)
+        if (!typedConfirmed) {
+          response = { error: "用户拒绝了签名请求" }
+        } else {
+          response = await chrome.runtime.sendMessage({
+            name: "dapp-sign-typed-data",
+            body: { method, params },
+          })
+        }
         break
+      }
 
       default:
         response = { error: `Unsupported method: ${method}` }
@@ -376,6 +534,23 @@ window.addEventListener("message", async (event) => {
       console.error("[WLT Wallet] Failed to send error back:", e)
     }
   }
+})
+
+// 监听 background 发来的响应，转发给注入脚本（MAIN world）
+// 这样注入脚本不需要暴露全局 __wltResolve 函数
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.name === "wlt-resolve-response") {
+    const { id, result, error } = message.body || {}
+    // 转发到 MAIN world（注入脚本通过 window.addEventListener("message") 接收）
+    window.postMessage({
+      channel: WLT_CHANNEL,
+      id,
+      result,
+      error,
+    })
+    sendResponse({ received: true })
+  }
+  return false
 })
 
 // 初始化

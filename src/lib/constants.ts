@@ -16,7 +16,7 @@ export const SESSION_TIMEOUT_MS = 30 * 60 * 1000 // 30 minutes
 
 // 从环境变量读取默认网络配置
 const defaultChainId = Number(process.env.PLASMO_DEFAULT_CHAIN_ID) || 1
-const defaultRpcUrl = process.env.PLASMO_DEFAULT_RPC_URL || "https://eth.llamarpc.com"
+const defaultRpcUrl = process.env.PLASMO_DEFAULT_RPC_URL || "https://ethereum-rpc.publicnode.com"
 
 export const DEFAULT_NETWORKS: Network[] = [
   {
@@ -30,7 +30,7 @@ export const DEFAULT_NETWORKS: Network[] = [
   {
     chainId: 1,
     name: "Ethereum Mainnet",
-    rpcUrl: "https://eth.llamarpc.com",
+    rpcUrl: "https://ethereum-rpc.publicnode.com",
     currencySymbol: "ETH",
     blockExplorerUrl: "https://etherscan.io",
     isDefault: defaultChainId === 1,
