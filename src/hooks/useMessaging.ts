@@ -174,6 +174,26 @@ export function useMessaging() {
     })
   }, [])
 
+  const exportPrivateKey = useCallback(async (password: string) => {
+    return sendToBackground<
+      { password: string },
+      { success: boolean; privateKey?: string; error?: string }
+    >({
+      name: "export-private-key",
+      body: { password },
+    })
+  }, [])
+
+  const exportMnemonic = useCallback(async (password: string) => {
+    return sendToBackground<
+      { password: string },
+      { success: boolean; mnemonic?: string; error?: string }
+    >({
+      name: "export-mnemonic",
+      body: { password },
+    })
+  }, [])
+
   return {
     createWallet,
     importMnemonic,
@@ -190,5 +210,7 @@ export function useMessaging() {
     recoverWallet,
     getGasPrice,
     getTokenInfo,
+    exportPrivateKey,
+    exportMnemonic,
   }
 }
