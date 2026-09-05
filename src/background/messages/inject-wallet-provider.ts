@@ -39,7 +39,10 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
           if (pending) {
             pendingRequests.delete(data.id);
             if (data.error) {
-              pending.reject(new Error(data.error));
+              // EIP-1193 error: code 4001 = User rejected the request
+              const error = new Error(data.error);
+              (error as any).code = 4001;
+              pending.reject(error);
             } else {
               pending.resolve(data.result);
             }
